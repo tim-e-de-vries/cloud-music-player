@@ -26,7 +26,10 @@ const UIElements = {
     nextButton: document.getElementById('next-button')!,
     currentSongTitle: document.getElementById('current-song-title')!,
     playlistElement: document.getElementById('playlist')!,
-    progressBar: document.getElementById('progress-bar')!,
+    // New elements for seek slider
+    seekSlider: document.getElementById('seekSlider') as HTMLInputElement,
+    currentTimeElement: document.getElementById('currentTime')!,
+    durationElement: document.getElementById('duration')!,
 };
 
 // --- Application State ---
@@ -174,12 +177,26 @@ class MusicPlayer {
 
     private updateProgressBar() {
         const { duration, currentTime } = UIElements.audioPlayer;
-        if (duration > 0) {
-            const progressPercent = (currentTime / duration) * 100;
-            UIElements.progressBar.style.width = `${progressPercent}%`;
+        
+        // Update seek slider
+        if (!isNaN(duration)) {
+            UIElements.seekSlider.max = duration.toString();
+            UIElements.seekSlider.value = currentTime.toString();
+        }
+
+        // Update time display
+        UIElements.currentTimeElement.textContent = this.formatTime(currentTime);
+        if (!isNaN(duration)) {
+            UIElements.durationElement.textContent = this.formatTime(duration);
         }
     }
-    
+
+    private formatTime(seconds: number): string {
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
     /**
      * Caching logic: Fetches and caches the next 5 and previous 5 songs.
      */
@@ -229,15 +246,28 @@ class MusicPlayer {
         UIElements.audioPlayer.addEventListener('play', () => {
             this.isPlaying = true;
             this.updatePlayPauseIcon();
+            this.updateProgressBar();
         });
         
         UIElements.audioPlayer.addEventListener('pause', () => {
             this.isPlaying = false;
             this.updatePlayPauseIcon();
         });
+
+        // Event listener for seeking
+        UIElements.seekSlider.addEventListener('input', () => {
+            UIElements.audioPlayer.currentTime = parseFloat(UIElements.seekSlider.value);
+        });
+
+        // Event listener for when audio metadata is loaded (to set duration)
+        UIElements.audioPlayer.addEventListener('loadedmetadata', () => {
+            if (!isNaN(UIElements.audioPlayer.duration)) {
+                UIElements.seekSlider.max = UIElements.audioPlayer.duration.toString();
+                UIElements.durationElement.textContent = this.formatTime(UIElements.audioPlayer.duration);
+            }
+        });
     }
 }
 
 // Start the application
 new MusicPlayer();
-
