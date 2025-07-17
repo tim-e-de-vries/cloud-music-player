@@ -1,0 +1,4 @@
+server/node_modules/
+server/.gcloudignore
+server/service-account-key.json
+server/package-lock.json

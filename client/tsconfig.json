@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    // ... other options like "target", "outDir", "module", "sourceMap"
+      "target": "es2017",
+      "module": "commonjs",
+      "sourceMap": true,    
+    "outDir": "./dist", // Example output directory
+    "rootDir": "./src"  // Specify the root of your source files
+  },
+  "include": [
+    "./src/**/*.ts" // This means "include all .ts files in 'src' and its subdirectories"
+  ],
+  "exclude": [
+    "node_modules", // Always good to exclude node_modules
+    "./dist"        // Exclude your output directory
+  ]
+}

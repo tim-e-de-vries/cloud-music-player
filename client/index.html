@@ -1,0 +1,80 @@
+<!-- File: index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Drive Music Player</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .player-button {
+            transition: all 0.2s ease-in-out;
+        }
+        .player-button:hover {
+            transform: scale(1.1);
+            color: #3b82f6; /* blue-500 */
+        }
+        .song-item.active {
+            background-color: #dbeafe; /* blue-100 */
+            color: #1e40af; /* blue-800 */
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div id="loading-container" class="text-center">
+        <i class="fas fa-spinner fa-spin fa-3x text-gray-500"></i>
+        <p class="mt-4 text-lg text-gray-600">Loading music library...</p>
+    </div>
+
+    <div id="player-container" class="hidden w-full max-w-md bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <!-- Now Playing Info -->
+        <div class="text-center mb-6">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Now Playing</h2>
+            <p id="current-song-title" class="text-2xl font-bold text-gray-800 mt-1 truncate">Select a song</p>
+        </div>
+
+        <!-- Audio Element (hidden) -->
+        <audio id="audio-player" class="w-full"></audio>
+
+        <!-- Player Controls -->
+        <div class="flex items-center justify-center space-x-8 my-6">
+            <button id="prev-button" class="player-button text-gray-600 text-3xl">
+                <i class="fas fa-backward-step"></i>
+            </button>
+            <button id="play-pause-button" class="player-button text-white bg-blue-500 rounded-full w-20 h-20 flex items-center justify-center text-4xl shadow-md">
+                <i id="play-icon" class="fas fa-play"></i>
+                <i id="pause-icon" class="fas fa-pause hidden"></i>
+            </button>
+            <button id="next-button" class="player-button text-gray-600 text-3xl">
+                <i class="fas fa-forward-step"></i>
+            </button>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+            <div id="progress-bar" class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
+        </div>
+
+        <!-- Playlist -->
+        <div>
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Playlist</h3>
+            <div id="playlist" class="max-h-60 overflow-y-auto rounded-lg border">
+                <!-- Song items will be injected here by TypeScript -->
+            </div>
+        </div>
+    </div>
+    
+    <div id="error-container" class="hidden text-center p-8 bg-red-100 text-red-700 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold">An Error Occurred</h2>
+        <p id="error-message" class="mt-2"></p>
+    </div>
+
+    <script type="module" src="dist/client.js"></script>
+</body>
+</html>
