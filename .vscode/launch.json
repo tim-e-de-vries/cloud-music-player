@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome against localhost",
+            "url": "http://localhost:8080/index.html",
+            "webRoot": "${workspaceFolder}",
+            "sourceMapPathOverrides": {
+                // This is crucial if your compiled JS is in a subfolder like 'dist'
+                // It tells the debugger where to find the original TypeScript sources
+                "webpack:///./*": "${webRoot}/client/*", // Common for webpack, may not be needed
+                "/*.js": "${webRoot}/client/dist/*.js", // For JavaScript files directly in root
+                // If source maps reference files like "src/app.ts" but are in "dist/app.js.map"
+                "../src/*.ts": "${webRoot}/client/src/*.ts", // Example: if source maps use relative paths like "../src/..."
+                "dist/*.js": "${webRoot}/client/dist/*.js"
+            },
+            "preLaunchTask": "tsc: build - client/tsconfig.json" // Optional: run tsc before debugging
+        }
+    ]
+}

@@ -156,14 +156,21 @@ class MusicPlayer {
     updateProgressBar() {
         const { duration, currentTime } = UIElements.audioPlayer;
         // Update seek slider
-        if (!isNaN(duration)) {
+        if (!isNaN(duration) && (isFinite(duration))) {
             UIElements.seekSlider.max = duration.toString();
             UIElements.seekSlider.value = currentTime.toString();
         }
+        else {
+            UIElements.seekSlider.max = "N/A";
+            UIElements.seekSlider.value = ":Streaming";
+        }
         // Update time display
         UIElements.currentTimeElement.textContent = this.formatTime(currentTime);
-        if (!isNaN(duration)) {
+        if (!isNaN(duration) && (isFinite(duration))) {
             UIElements.durationElement.textContent = this.formatTime(duration);
+        }
+        else {
+            UIElements.durationElement.textContent = "N/A:Streaming";
         }
     }
     formatTime(seconds) {
@@ -228,9 +235,13 @@ class MusicPlayer {
         });
         // Event listener for when audio metadata is loaded (to set duration)
         UIElements.audioPlayer.addEventListener('loadedmetadata', () => {
-            if (!isNaN(UIElements.audioPlayer.duration)) {
+            if (!isNaN(UIElements.audioPlayer.duration) && (isFinite(UIElements.audioPlayer.duration))) {
                 UIElements.seekSlider.max = UIElements.audioPlayer.duration.toString();
                 UIElements.durationElement.textContent = this.formatTime(UIElements.audioPlayer.duration);
+            }
+            else {
+                UIElements.seekSlider.max = "N/A:Streaming";
+                UIElements.durationElement.textContent = "N/A:Streaming";
             }
         });
     }
