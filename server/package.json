@@ -2,19 +2,24 @@
   "name": "music-proxy",
   "version": "1.0.0",
   "main": "./dist/index.js",
-   "scripts": {
-     "build": "tsc",
-    "start": "node ./dist/index.js",
-    "deploy": "gcloud functions deploy getMusicList --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com &&  gcloud functions deploy streamMusicFile  --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com"
+  "scripts": {
+    "build": "tsc",
+    "start": "node ./dist/index_old.js",
+    "deploy": "gcloud functions deploy streamMusicFile  --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com &&  gcloud functions deploy fetchDriveFilesRecursively --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com  && gcloud functions deploy syncGoogleDriveToFirestore --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com"
   },
   "dependencies": {
+    "@google-cloud/functions": "^4.2.0",
     "@google-cloud/functions-framework": "^3.0.0",
+    "@types/express": "^5.0.3",
     "cors": "^2.8.5",
-    "googleapis": "^105.0.0"
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "googleapis": "^105.0.0",
+    "music-metadata": "^11.7.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.13",
-    "@types/node": "^18.0.0",
-    "typescript": "^4.9.0"
+    "@types/node": "^18.19.119",
+    "typescript": "^5.8.3"
   }
 }

@@ -6,9 +6,20 @@
 			"script": "build",
 			"path": "server",
 			"group": "build",
-			"problemMatcher": [],
+			"problemMatcher": ["$tsc"],
 			"label": "npm: build - server",
 			"detail": "tsc"
-		}
+		},
+		{
+            "label": "build", // A user-friendly name for your task
+            "type": "npm",    // Specifies that this is an npm task
+            "script": "build",// Refers to the "build" script in your package.json
+            "group": {
+                "kind": "build",
+                "isDefault": true // Makes this the default build task (run with Ctrl+Shift+B)
+            },
+            "problemMatcher": ["$tsc"], // Or "$tsc" for TypeScript, "$eslint-stylish" for ESLint, etc.
+            "detail": "Runs the 'build' script from package.json"
+        }
 	]
 }

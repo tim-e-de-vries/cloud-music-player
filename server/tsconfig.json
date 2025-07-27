@@ -5,10 +5,13 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2017",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
     "outDir": "./dist/",
     "rootDir": "./src/",
+    "sourceMap": true,
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
   },
   "include": ["./src/*.ts"],
   "exclude": ["node_modules"]
