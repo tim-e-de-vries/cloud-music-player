@@ -1,0 +1,4 @@
+functions-framework
+ytmusicapi
+requests
+Flask # jsonify needs Flask, which functions-framework depends on, but explicit is good

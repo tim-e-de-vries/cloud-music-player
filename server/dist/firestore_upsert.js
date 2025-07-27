@@ -41,21 +41,21 @@ const admin = __importStar(require("firebase-admin"));
 const googleapis_1 = require("googleapis");
 const functions = __importStar(require("@google-cloud/functions-framework"));
 const cors_1 = __importDefault(require("cors"));
-//import { parseStream, IAudioMetadata, IPicture } from 'music-metadata';  
-//import { parseStream, ILyricsTag} from 'music-metadata';  
-const music_metadata_1 = require("music-metadata");
 // Initialize Firebase Admin SDK and Google Drive API (as above)
 admin.initializeApp();
 const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true });
-const auth = new googleapis_1.google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+const drive = googleapis_1.google.drive({
+    version: 'v3',
+    auth: new googleapis_1.google.auth.GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/drive.readonly']
+    })
 });
-const drive = googleapis_1.google.drive({ version: 'v3', auth });
+// const auth = new google.auth.GoogleAuth({
+//   scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+// });
+// const drive = google.drive({ version: 'v3', auth });
+// const drive = google.drive({ version: 'v3', auth });
 const DRIVE_FOLDER_ID = '1VxClhCDuH0fX4Fkze3yJmkWQkYiutxOs'; //MP3s root
-//const DRIVE_FOLDER_ID = '19rCsfU1J6fJdIynDh73kPimkce1tXlxj';   //Digitally Imported
-//const mm = require('music-metadata'); // <--- NEW IMPORT: You need to install 'music-metadata' in your Cloud Function's dependencies.
-const CLOUD_FUNCTION_URL = "https://us-central1-wireguard-283822.cloudfunctions.net/get-youtube-music-lyrics";
 // Define the collection name for your songs
 // Consider a structure like `users/{userId}/songs` if data is per-user
 const SONGS_COLLECTION = 'songs';
@@ -75,7 +75,7 @@ async function fetchDriveFilesRecursively(folderId) {
     //   const query:string | undefined =  `'${folderId}' in parents and (mimeType contains 'audio/' or mimeType='application/vnd.google-apps.folder')`;
     try {
         do {
-            const response = await drive.files.list({
+            const response = drive.files.list({
                 q: `'${folderId}' in parents and (mimeType='audio/mpeg' or mimeType='audio/flac' or mimeType='audio/x-flac' or mimeType='audio/wav' or mimeType='application/vnd.google-apps.folder')`, // Explicitly define the type for 'response'
                 fields: 'nextPageToken, files(id, name, mimeType, size, parents)',
                 pageToken: pageToken || undefined,
@@ -91,44 +91,21 @@ async function fetchDriveFilesRecursively(folderId) {
             //       pageSize: 1000 // Max page size for efficiency
             //   });
             const files = response.data.files || [];
-            const formattedFiles = await Promise.all(files.map(async (file) => {
-                if (file.mimeType === 'application/vnd.google-apps.folder') {
-                    const songMetadata = {
-                        id: file.id,
-                        name: file.name,
-                        mimeType: file.mimeType,
-                        modifiedTime: file.modifiedTime, // Ensure this is always present
-                        isFolder: file.mimeType === 'application/vnd.google-apps.folder',
-                        _lastUpdated: admin.firestore.FieldValue.serverTimestamp() // Will be set later during Firestore  write
-                    };
-                    return songMetadata;
-                }
-                ;
-                const songMetadata = {
-                    id: file.id,
-                    name: file.name,
-                    mimeType: file.mimeType,
-                    size: file.size, // Will be undefined for folders
-                    parents: file.parents || [],
-                    inFolderName: await getParentFolderName(file.id),
-                    modifiedTime: file.modifiedTime, // Ensure this is always present
-                    isFolder: file.mimeType === 'application/vnd.google-apps.folder',
-                    _lastUpdated: admin.firestore.FieldValue.serverTimestamp() // Will be set later during Firestore  write
-                };
-                let respon = await getMusicMetadata(file.id);
-                songMetadata.Album = respon.Album;
-                songMetadata.Artist = respon.Artist;
-                songMetadata.Title = respon.Title;
-                songMetadata.Lyrics = respon.Lyrics;
-                songMetadata.ImagePath = respon.ImagePath;
-                return songMetadata;
+            const formattedFiles = files.map(file => ({
+                id: file.id,
+                name: file.name,
+                mimeType: file.mimeType,
+                size: file.size, // Will be undefined for folders
+                parents: file.parents || [],
+                modifiedTime: file.modifiedTime, // Ensure this is always present
+                isFolder: file.mimeType === 'application/vnd.google-apps.folder',
+                _lastUpdated: admin.firestore.FieldValue.serverTimestamp() // Will be set later during Firestore write
             }));
-            console.log(`Google Drive responded with ${formattedFiles.length} files`);
             allFiles = allFiles.concat(formattedFiles);
             pageToken = response.data.nextPageToken;
             // Recursively search sub-folders
             for (const file of formattedFiles) { // Iterate over formatted files
-                if (file.mimeType === 'application/vnd.google-apps.folder') {
+                if (file.isFolder) {
                     const subFolderFiles = await fetchDriveFilesRecursively(file.id);
                     allFiles = allFiles.concat(subFolderFiles);
                 }
@@ -240,122 +217,13 @@ async function syncGoogleDriveToFirestore(rootFolderId, userId) {
     }
     console.log(`Sync complete for user: ${userId || 'global'}.`);
 }
-async function getMusicMetadata(fileId) {
-    let fileData = { Title: '' }; // Initialize with a default or empty object
-    try {
-        const fileStreamResponse = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
-        // Parse metadata from the stream
-        const metadata = await (0, music_metadata_1.parseStream)(fileStreamResponse.data);
-        // Add common metadata fields to the fileData object
-        fileData.Artist = metadata.common.artist || 'Unknown Artist';
-        fileData.Album = metadata.common.album || 'Unknown Album';
-        fileData.Title = metadata.common.title || 'Unknown Title'; // Use parsed title or original     fileData.Lyrics = ""; // Initialize fileData.Lyrics as an empty string
-        fileData.Lyrics = ""; // Initialize fileData.Lyrics as an empty string
-        // const lyrics: ILyricsTag[] = metadata.common.lyrics || [];
-        // if (lyrics.length > 0) {
-        //     lyrics.forEach((l: ILyricsTag, index: number) => {
-        //         // Append the lyric text and a newline character
-        //         fileData.Lyrics += l.text + '\n';
-        //   });
-        // if (fileData.Lyrics.length > 0) {
-        //     fileData.Lyrics = fileData.Lyrics.trimEnd(); // Removes trailing whitespace, including newlines
-        // }
-        if (fileData.Lyrics.length == 0) {
-            const lyricresp = await getLyricsFromCloudFunction(fileData.Artist, fileData.Title);
-            if (lyricresp) {
-                fileData.Lyrics = lyricresp.lyrics || '';
-                fileData.ImagePath = lyricresp.artwork || '';
-            }
-        }
-    }
-    catch (error) { // Explicitly type error as 'any' or 'unknown'
-        console.warn(`Could not extract metadata for ${fileId}:`, error.message);
-        // Fallback if metadata extraction fails
-        fileData.Artist = 'N/A';
-        fileData.Album = 'N/A';
-        // fileData.Title will remain undefined if not set here, or you can set it to a default
-    }
-    return fileData;
-}
-async function getParentFolderName(fileId) {
-    const parentFolderNames = [];
-    try {
-        // Step 1: Get the parent IDs of the file
-        const fileMetadataRes = await drive.files.get({
-            fileId: fileId,
-            fields: 'parents',
-        });
-        const parentIds = fileMetadataRes.data.parents || [];
-        //    console.log(`Parent IDs for file '${fileId}': ${parentIds}`);
-        // Step 2: Get the name of each parent folder
-        for (const parentId of parentIds) {
-            try {
-                const folderMetadataRes = await drive.files.get({
-                    fileId: parentId,
-                    fields: 'name, mimeType',
-                });
-                if (folderMetadataRes.data.mimeType === 'application/vnd.google-apps.folder') {
-                    parentFolderNames.push(folderMetadataRes.data.name);
-                }
-                else {
-                    console.log(`Parent '${parentId}' is not a folder (mimeType: ${folderMetadataRes.data.mimeType}).`);
-                }
-            }
-            catch (error) {
-                console.error(`An error occurred while fetching parent folder '${parentId}':`, error);
-            }
-        }
-        return parentFolderNames[0] || '';
-    }
-    catch (error) {
-        console.error('An error occurred in getParentFolderName:', error);
-        return parentFolderNames[0] || '';
-    }
-}
-async function getLyricsFromCloudFunction(artist, trackTitle) {
-    try {
-        const response = await fetch(CLOUD_FUNCTION_URL, {
-            method: "POST", // Or 'GET' if you prefer query parameters, but POST with JSON is generally cleaner for data.
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                artist: artist,
-                trackTitle: trackTitle,
-            }),
-        });
-        // Check if the request was successful (status code 2xx)
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-            console.error(`Error calling Cloud Function: ${response.status} - ${errorData.message}`);
-            // Throw an error to be caught by the caller
-            throw new Error(`Failed to fetch lyrics: ${errorData.message || response.statusText}`);
-        }
-        const data = await response.json();
-        if (data.lyrics) {
-            console.log(`Successfully fetched lyrics for ${artist} - ${trackTitle}`);
-        }
-        else {
-            console.warn(`Lyrics not found for ${artist} - ${trackTitle}. Message: ${data.message}`);
-        }
-        return data;
-    }
-    catch (error) {
-        console.error(`Network or unexpected error while fetching lyrics:`, error);
-        // You might want to re-throw or return null based on your error handling strategy
-        throw error; // Re-throw to propagate the error
-    }
-}
 functions.http('fetchDriveFilesRecursively', async (req, res) => {
     // Use the CORS middleware
     // let pageToken = null;
     corsMiddleware(req, res, async () => {
         try {
-            const { folderId } = req.query; // Get folderId from query parameters
-            // Use the provided folderId, or fall back to DRIVE_FOLDER_ID if not provided
-            const targetFolderId = typeof folderId === 'string' ? folderId : DRIVE_FOLDER_ID;
-            console.log(`Fetching files from folder: ${targetFolderId}`);
-            const fileList = await fetchDriveFilesRecursively(targetFolderId);
+            console.log(`Fetching files from folder: ${DRIVE_FOLDER_ID}`);
+            const fileList = await fetchDriveFilesRecursively(DRIVE_FOLDER_ID);
             if (!fileList || fileList.length === 0) {
                 res.status(404).send('No audio files found in the specified folder.');
                 return;
@@ -366,38 +234,6 @@ functions.http('fetchDriveFilesRecursively', async (req, res) => {
         catch (error) {
             console.error('Error fetching file list from Google Drive:', error);
             res.status(500).send('Failed to retrieve file list from Google Drive.');
-        }
-    });
-});
-/**
- * An HTTP-triggered Cloud Function to stream a specific audio file from Google Drive.
- * The file ID is passed as a query parameter (e.g., /streamFile?fileId=xxxx)
- */
-functions.http('streamMusicFile', async (req, res) => {
-    corsMiddleware(req, res, async () => {
-        const { fileId } = req.query;
-        if (!fileId || typeof fileId !== 'string') {
-            res.status(400).send('File ID is required.');
-            return;
-        }
-        try {
-            console.log(`Streaming file with ID: ${fileId}`);
-            // Set headers for streaming audio
-            res.setHeader('Content-Type', 'audio/mpeg'); // Adjust if you use other formats
-            res.setHeader('Accept-Ranges', 'bytes');
-            // Get the file as a readable stream
-            const fileStream = await drive.files.get({ fileId: fileId, alt: 'media' }, { responseType: 'stream' });
-            // Pipe the stream from Google Drive directly to the client's response
-            fileStream.data
-                .on('error', (err) => {
-                console.error('Error during file stream:', err);
-                res.status(500).send('Error streaming the file.');
-            })
-                .pipe(res);
-        }
-        catch (error) {
-            console.error(`Error streaming file ${fileId}:`, error);
-            res.status(500).send('Failed to stream the file.');
         }
     });
 });
@@ -406,11 +242,8 @@ functions.http('syncGoogleDriveToFirestore', async (req, res) => {
     // let pageToken = null;
     corsMiddleware(req, res, async () => {
         try {
-            const { folderId } = req.query; // Get folderId from query parameters
-            // Use the provided folderId, or fall back to DRIVE_FOLDER_ID if not provided
-            const targetFolderId = typeof folderId === 'string' ? folderId : DRIVE_FOLDER_ID;
-            console.log(`Fetching files from folder: ${targetFolderId}`);
-            const fileList = await syncGoogleDriveToFirestore(targetFolderId);
+            console.log(`Fetching files from folder: ${DRIVE_FOLDER_ID}`);
+            const fileList = await syncGoogleDriveToFirestore(DRIVE_FOLDER_ID);
             if (!fileList || fileList.length === 0) {
                 res.status(404).send('No audio files found in the specified folder.');
                 return;
@@ -424,4 +257,22 @@ functions.http('syncGoogleDriveToFirestore', async (req, res) => {
         }
     });
 });
-//# sourceMappingURL=index.js.map
+// // Example usage within a Google Cloud Function (e.g., triggered by Pub/Sub or HTTP)
+// // This GCF would need appropriate IAM permissions to access Google Drive API and Firestore.
+// export const syncMusicLibrary = functions.pubsub.topic('google-drive-changes').onPublish(async (message, context) => {
+//   // You'd need logic here to determine the rootFolderId and userId
+//   // This could come from a message payload if you're using Drive's Change Tracking API
+//   // or a fixed value for a single-user setup.
+//   const userId = 'your_user_id'; // Or extract from message/auth
+//   const rootFolderId = 'YOUR_GOOGLE_DRIVE_ROOT_MUSIC_FOLDER_ID';
+//   try {
+//     await syncGoogleDriveToFirestore(rootFolderId, userId);
+//     console.log('Music library sync successful!');
+//   } catch (error) {
+//     console.error('Failed to sync music library:', error);
+//     // Depending on your error handling, you might want to re-queue the message
+//     // or log it for manual intervention.
+//     throw new functions.https.HttpsError('internal', 'Failed to sync music library', error);
+//   }
+// });
+//# sourceMappingURL=firestore_upsert.js.map
