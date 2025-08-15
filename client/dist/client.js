@@ -153,6 +153,7 @@ class MusicPlayer {
             }
         });
     }
+    
     updateProgressBar() {
         const { duration, currentTime } = UIElements.audioPlayer;
         // Update seek slider
