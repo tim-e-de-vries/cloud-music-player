@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node ./dist/index_old.js",
-    "deploy": "gcloud functions deploy streamMusicFile  --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com &&  gcloud functions deploy fetchDriveFilesRecursively --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com  && gcloud functions deploy syncGoogleDriveToFirestore --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com"
+    "deploy": "gcloud functions deploy streamMusicFile  --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com && gcloud functions deploy syncGoogleDrive --runtime nodejs22 --trigger-http --allow-unauthenticated  --service-account=music-streamer-sa@wireguard-283822.iam.gserviceaccount.com --region=us-central1  --set-env-vars ^@^CORS_ORIGINS=http://localhost:8080,https://storage.googleapis.com"
   },
   "dependencies": {
     "@google-cloud/functions": "^4.2.0",

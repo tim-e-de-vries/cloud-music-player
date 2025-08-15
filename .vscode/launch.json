@@ -46,11 +46,11 @@
                 {
           "type": "node",
           "request": "launch",
-          "name": "syncGoogleDriveToFirestore - Launch Cloud Function (HTTP)",
+          "name": "syncGoogleDrive - Launch Cloud Function (HTTP)",
           "skipFiles": ["<node_internals>/**"],
           "program": "${workspaceFolder}/server/node_modules/.bin/functions-framework",
           "args": [
-            "--target", "syncGoogleDriveToFirestore", // Your exported function name
+            "--target", "syncGoogleDrive", // Your exported function name
             "--port", "8080",
             "--signature-type", "http",
             "--source", "./server/dist" // Where your compiled JS files are
