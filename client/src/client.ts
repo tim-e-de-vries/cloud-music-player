@@ -33,14 +33,103 @@ const UIElements = {
 };
 
 // --- Application State ---
+// Simple LRU cache for Blob object URLs. Automatically revokes URLs on eviction.
+class BlobUrlCache {
+    private map = new Map<string, { url: string; size: number; lastAccess: number }>();
+    private protectedId?: string;
+
+    constructor(private maxItems = 10, private maxBytes = 50 * 1024 * 1024) {}
+
+    has(id: string) {
+        return this.map.has(id);
+    }
+
+    get(id: string) {
+        const entry = this.map.get(id);
+        if (!entry) return undefined;
+        entry.lastAccess = Date.now();
+        // move to end to mark as recently used
+        this.map.delete(id);
+        this.map.set(id, entry);
+        return entry.url;
+    }
+
+    set(id: string, url: string, size = 0) {
+        // If replacing existing, revoke old URL first
+        const existing = this.map.get(id);
+        if (existing && existing.url !== url) {
+            try { URL.revokeObjectURL(existing.url); } catch (_) {}
+            this.map.delete(id);
+        }
+
+        this.map.set(id, { url, size, lastAccess: Date.now() });
+        this.evictIfNeeded();
+    }
+
+    delete(id: string) {
+        const e = this.map.get(id);
+        if (!e) return;
+        try { URL.revokeObjectURL(e.url); } catch (_) {}
+        this.map.delete(id);
+    }
+
+    clear() {
+        for (const e of this.map.values()) {
+            try { URL.revokeObjectURL(e.url); } catch (_) {}
+        }
+        this.map.clear();
+    }
+
+    keys(): string[] { return Array.from(this.map.keys()); }
+
+    setProtected(id?: string) { this.protectedId = id; }
+
+    private totalBytes(): number {
+        let sum = 0;
+        for (const v of this.map.values()) sum += v.size || 0;
+        return sum;
+    }
+
+    private evictIfNeeded() {
+        // Evict while limits exceeded
+        while ((this.map.size > this.maxItems) || (this.totalBytes() > this.maxBytes)) {
+            // least-recently-used = first item in Map iteration
+            const firstKey = this.map.keys().next().value as string | undefined;
+            if (!firstKey) break;
+            // Protect the currently playing id from eviction
+            if (this.protectedId && firstKey === this.protectedId) {
+                // move protected to end and continue
+                const prot = this.map.get(firstKey)!;
+                this.map.delete(firstKey);
+                this.map.set(firstKey, prot);
+                // find next key
+                const nextKey = this.map.keys().next().value as string | undefined;
+                if (!nextKey || nextKey === firstKey) break;
+            }
+
+            const entryKey = this.map.keys().next().value as string | undefined;
+            if (!entryKey) break;
+            const entry = this.map.get(entryKey)!;
+            try { URL.revokeObjectURL(entry.url); } catch (_) {}
+            this.map.delete(entryKey);
+        }
+    }
+}
+
 class MusicPlayer {
     private playlist: Song[] = [];
     private currentIndex: number = -1;
     private isPlaying: boolean = false;
-    private audioCache: Map<string, string> = new Map(); // <songId, blobUrl>
+    // Replace simple Map with an LRU cache that revokes object URLs on eviction
+    private audioCache = new BlobUrlCache(10, 50 * 1024 * 1024); // 10 items, 50MB
 
     constructor() {
         this.init();
+        // Revoke any cached object URLs on unload to free memory
+        if (typeof window !== 'undefined') {
+            window.addEventListener('beforeunload', () => this.audioCache.clear());
+            window.addEventListener('pagehide', () => this.audioCache.clear());
+        }
     }
 
     private async init() {
@@ -112,12 +201,15 @@ class MusicPlayer {
                 songUrl = `${STREAM_URL_BASE}?fileId=${song.id}`;
                 console.log(`Streaming ${song.name} directly.`);
             }
-            
+
+            // Protect currently playing id from eviction
+            this.audioCache.setProtected(song.id);
+
             UIElements.audioPlayer.src = songUrl;
             await UIElements.audioPlayer.play();
             this.isPlaying = true;
             this.updatePlayPauseIcon();
-            
+
             // Pre-cache surrounding songs
             this.updateCache();
 
@@ -233,7 +325,7 @@ class MusicPlayer {
                     const response = await fetch(`${STREAM_URL_BASE}?fileId=${song.id}`);
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
-                    this.audioCache.set(song.id, blobUrl);
+                    this.audioCache.set(song.id, blobUrl, blob.size || 0);
                     console.log(`Cached ${song.name} successfully.`);
                 } catch (error) {
                     console.warn(`Failed to cache ${song.name}:`, error);

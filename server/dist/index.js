@@ -135,12 +135,93 @@ functions.http('streamMusicFile', async (req, res) => {
         }
         try {
             console.log(`Streaming file with ID: ${fileId}`);
-            res.setHeader('Content-Type', 'audio/mpeg');
+            // First, fetch file metadata to determine size and mimeType
+            const metaRes = await drive_service_1.drive.files.get({ fileId: fileId, fields: 'size, mimeType' });
+            const totalSize = parseInt(metaRes.data.size || '0', 10) || undefined;
+            const mimeType = metaRes.data.mimeType || 'application/octet-stream';
             res.setHeader('Accept-Ranges', 'bytes');
-            const fileStream = await drive_service_1.drive.files.get({ fileId: fileId, alt: 'media' }, { responseType: 'stream' });
-            fileStream.data.on('error', (err) => {
-                console.error('Error during file stream:', err);
-                res.status(500).send('Error streaming the file.');
+            // Support HEAD requests by returning headers only
+            if (req.method === 'HEAD') {
+                if (totalSize !== undefined) {
+                    res.setHeader('Content-Length', String(totalSize));
+                }
+                res.setHeader('Content-Type', mimeType);
+                res.status(200).end();
+                return;
+            }
+            const rangeHeader = (req.headers && req.headers.range) || req.get('range');
+            if (!rangeHeader) {
+                // No range requested - stream full file
+                if (totalSize !== undefined) {
+                    res.setHeader('Content-Length', String(totalSize));
+                }
+                res.setHeader('Content-Type', mimeType);
+                const fileStream = await drive_service_1.drive.files.get({ fileId: fileId, alt: 'media' }, { responseType: 'stream' });
+                fileStream.data.on('error', (err) => {
+                    console.error('Error during file stream:', err);
+                    // If headers not sent yet, send 500
+                    try {
+                        res.status(500).send('Error streaming the file.');
+                    }
+                    catch (_) { }
+                }).pipe(res);
+                return;
+            }
+            // Parse single-range header like: bytes=START- or bytes=START-END or bytes=-SUFFIX
+            const rangeMatch = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.replace(/\s/g, ''));
+            if (!rangeMatch) {
+                // Malformed range
+                console.warn('Malformed Range header:', rangeHeader);
+                res.status(416).setHeader('Content-Range', `bytes */${totalSize || 0}`).end();
+                return;
+            }
+            const startStr = rangeMatch[1];
+            const endStr = rangeMatch[2];
+            let start;
+            let end;
+            if (startStr === '' && endStr) {
+                // suffix range - last N bytes
+                const suffixLength = parseInt(endStr, 10);
+                if (!totalSize) {
+                    res.status(416).setHeader('Content-Range', `bytes */${totalSize || 0}`).end();
+                    return;
+                }
+                start = Math.max(totalSize - suffixLength, 0);
+                end = totalSize - 1;
+            }
+            else {
+                start = startStr ? parseInt(startStr, 10) : undefined;
+                end = endStr ? parseInt(endStr, 10) : undefined;
+            }
+            if (start === undefined)
+                start = 0;
+            if (totalSize !== undefined) {
+                if (end === undefined || end > totalSize - 1)
+                    end = totalSize - 1;
+            }
+            if (totalSize !== undefined && (start >= totalSize || start < 0 || (end !== undefined && end < start))) {
+                res.status(416).setHeader('Content-Range', `bytes */${totalSize}`).end();
+                return;
+            }
+            const chunkEnd = end;
+            const chunkStart = start;
+            const chunkSize = (chunkEnd !== undefined) ? (chunkEnd - chunkStart + 1) : undefined;
+            // Request the byte range from Drive by passing Range header to upstream
+            const driveRangeHeader = `bytes=${chunkStart}-${chunkEnd !== null && chunkEnd !== void 0 ? chunkEnd : ''}`;
+            const upstreamRes = await drive_service_1.drive.files.get({ fileId: fileId, alt: 'media' }, { responseType: 'stream', headers: { Range: driveRangeHeader } });
+            // Set response headers for partial content
+            res.status(206);
+            res.setHeader('Content-Type', mimeType);
+            res.setHeader('Content-Range', `bytes ${chunkStart}-${chunkEnd}/${totalSize !== null && totalSize !== void 0 ? totalSize : '*'}`);
+            if (chunkSize !== undefined)
+                res.setHeader('Content-Length', String(chunkSize));
+            res.setHeader('Accept-Ranges', 'bytes');
+            upstreamRes.data.on('error', (err) => {
+                console.error('Error during ranged file stream:', err);
+                try {
+                    res.status(500).send('Error streaming the file.');
+                }
+                catch (_) { }
             }).pipe(res);
         }
         catch (error) {
